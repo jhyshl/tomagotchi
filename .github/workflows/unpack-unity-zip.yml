@@ -17,9 +17,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ZIP_FILE="$(find . -maxdepth 1 -type f -name '*.zip' | head -n 1)"
+          ZIP_FILE="$(find . -maxdepth 2 -type f -name '*.zip' | head -n 1)"
           if [ -z "${ZIP_FILE}" ]; then
-            echo "No zip file found in repository root."
+            echo "No zip file found. Current files:"
+            find . -maxdepth 3 -print
             exit 1
           fi
 
@@ -29,9 +30,24 @@ jobs:
           rm -rf __MACOSX
           find . -name '.DS_Store' -delete
 
+          # Some mobile uploads used the older ZIP that contains one extra top folder:
+          # PixelTamagotchi_Unity_Starter/Assets, Packages, ProjectSettings.
+          if [ ! -d "Assets" ] || [ ! -d "Packages" ] || [ ! -d "ProjectSettings" ]; then
+            CANDIDATE="$(find . -maxdepth 2 -type d -name 'Assets' | head -n 1 | sed 's#/Assets$##')"
+            if [ -n "${CANDIDATE}" ] && [ -d "${CANDIDATE}/Assets" ] && [ -d "${CANDIDATE}/Packages" ] && [ -d "${CANDIDATE}/ProjectSettings" ]; then
+              echo "Found nested Unity project at ${CANDIDATE}; moving contents to repository root."
+              shopt -s dotglob
+              mv "${CANDIDATE}"/* .
+              rmdir "${CANDIDATE}" || true
+              shopt -u dotglob
+            fi
+          fi
+
           if [ ! -d "Assets" ] || [ ! -d "Packages" ] || [ ! -d "ProjectSettings" ]; then
             echo "Unity project folders were not found after unpacking."
             echo "Expected: Assets, Packages, ProjectSettings"
+            echo "Current files:"
+            find . -maxdepth 3 -print
             exit 1
           fi
 
