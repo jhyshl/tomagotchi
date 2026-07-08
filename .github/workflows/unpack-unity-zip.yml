@@ -1,0 +1,50 @@
+name: Unpack Unity ZIP
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  unpack:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Find and unpack ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          ZIP_FILE="$(find . -maxdepth 1 -type f -name '*.zip' | head -n 1)"
+          if [ -z "${ZIP_FILE}" ]; then
+            echo "No zip file found in repository root."
+            exit 1
+          fi
+
+          echo "Unpacking ${ZIP_FILE}"
+          unzip -o "${ZIP_FILE}" -d .
+          rm -f "${ZIP_FILE}"
+          rm -rf __MACOSX
+          find . -name '.DS_Store' -delete
+
+          if [ ! -d "Assets" ] || [ ! -d "Packages" ] || [ ! -d "ProjectSettings" ]; then
+            echo "Unity project folders were not found after unpacking."
+            echo "Expected: Assets, Packages, ProjectSettings"
+            exit 1
+          fi
+
+      - name: Commit unpacked Unity project
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Unpack Unity project files"
+            git push
+          fi
